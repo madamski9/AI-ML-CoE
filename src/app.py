@@ -32,11 +32,21 @@ _VERDICT_ICON = {
 }
 
 
-def save_decision(session_id: str, decision: str) -> None:
+def save_decision(decision: str, verdict: Verdict) -> None:
     record = {
-        "session_id": session_id,
-        "decision": decision,
+        "session_id": verdict.session_id,
+        "controller_decision": decision,
+        "ai_verdict": verdict.verdict,
+        "ai_confidence": verdict.confidence,
+        "override": decision != verdict.verdict and not (
+            decision == "SEND_BACK" and verdict.verdict == "NEEDS_CORRECTION"
+        ),
         "timestamp": datetime.now(timezone.utc).isoformat(),
+        "findings": [f.model_dump() for f in verdict.findings],
+        "suggested_correction": (
+            verdict.suggested_correction.model_dump()
+            if verdict.suggested_correction else None
+        ),
     }
     with _DECISIONS_FILE.open("a") as f:
         f.write(json.dumps(record) + "\n")
@@ -114,17 +124,17 @@ def render_verdict(v: Verdict) -> None:
     c1, c2, c3 = st.columns(3)
     with c1:
         if st.button("✓  PASS", use_container_width=True, type="primary"):
-            save_decision(v.session_id, "PASS")
+            save_decision("PASS", v)
             st.session_state["decision_done"] = "PASS"
             st.rerun()
     with c2:
         if st.button("✗  REJECT", use_container_width=True):
-            save_decision(v.session_id, "REJECT")
+            save_decision("REJECT", v)
             st.session_state["decision_done"] = "REJECT"
             st.rerun()
     with c3:
         if st.button("↩  SEND BACK", use_container_width=True):
-            save_decision(v.session_id, "SEND_BACK")
+            save_decision("SEND_BACK", v)
             st.session_state["decision_done"] = "SEND_BACK"
             st.rerun()
 
