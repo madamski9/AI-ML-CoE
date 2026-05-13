@@ -167,7 +167,49 @@ At 80 sessions/month (typical large AMS client) this is **under $0.03/month** on
 
 ---
 
+<<<<<<< Updated upstream
 ## Known Failure Modes
+=======
+## Train-set evaluation results
+
+Run with: `python predict.py --input dataset_candidate/train/sessions --output predictions_train.jsonl --eval dataset_candidate/train/labels.jsonl`
+
+```
+Total sessions : 50
+Accuracy       : 0.78
+Macro F1       : 0.784
+
+Per-class:
+  PASS              P=0.842  R=0.800  F1=0.821  (support=20)
+  REJECT            P=1.000  R=0.733  F1=0.846  (support=15)
+  NEEDS_CORRECTION  P=0.600  R=0.800  F1=0.686  (support=15)
+
+Confusion matrix (rows=gold, cols=pred):
+                   PASS  REJECT  NEEDS_CORRECTION
+  PASS               16       0                 4
+  REJECT              0      11                 4
+  NEEDS_CORRECTION    3       0                12
+
+Per-rule metrics:
+  rule    P      R      F1    TP  FP  FN  support
+  R-001   1.000  0.643  0.783  9   0   5   14
+  R-002   0.200  0.222  0.211  2   8   7    9
+  R-003   1.000  1.000  1.000  3   0   0    3
+  R-004   1.000  1.000  1.000  4   0   0    4
+  R-005   1.000  1.000  1.000  2   0   0    2
+  R-006   1.000  1.000  1.000  2   0   0    2
+  R-007   0.667  1.000  0.800 10   5   0   10
+  R-008   1.000  1.000  1.000  2   0   0    2
+  R-009   1.000  1.000  1.000  3   0   0    3
+  R-010   0.500  1.000  0.667  2   2   0    2
+```
+
+Notable: R-002 (module mismatch, LLM-backed) has the lowest precision — the local qwen2.5:7b model occasionally misclassifies the SAP module from the reason code, generating false positives. R-001 recall is 0.643 because some genuinely vague reason codes are long enough to pass the length check but still lack operational specifics.
+
+---
+
+## What I would build next (given another week)
+>>>>>>> Stashed changes
 
 **1. After-hours timezone mismatch (R-007)**
 The rule checks `start_time.hour` against UTC business hours. A session at `06:30 UTC` for a German client is `08:30 CET` — business hours — but R-007 fires anyway. Fix: add `client_timezone` to the session schema, or widen the UTC window to `05:00–22:00` as a conservative proxy.
@@ -181,6 +223,7 @@ The LLM guard fires only when `change_count < 10 AND tcode_count < 20`. A sessio
 **4. R-008 requires `ticket_requester` field**
 Self-approval is only detected when the optional `ticket_requester` field is present. Sessions where the requester is embedded in free-text reason code are missed entirely.
 
+<<<<<<< Updated upstream
 **5. R-002 over-fires on multi-module sessions**
 A Basis consultant doing a controlled emergency touching both MM and FI will trigger R-002 even though both modules appear in the reason. The rule currently flags any mismatch against the *primary* inferred module.
 
@@ -193,3 +236,12 @@ A Basis consultant doing a controlled emergency touching both MM and FI will tri
 3. **Streaming UI with log highlighting** — render transaction, change, and system logs with relevant lines highlighted per finding's colour. Controllers currently match evidence strings back to raw logs manually.
 4. **"Disagree with gold label" appendix** — after running the eval harness, document which label differences are genuine model mistakes vs. suspected labelling errors.
 5. **Adversarial input handling** — normalise out-of-order timestamps, Unicode control characters in `reason_code`, tcode fields with whitespace or lowercase variants, and malformed ISO 8601 timestamps.
+=======
+5. **Adversarial input handling** — validate and normalise: out-of-order timestamps (sort before checks), `reason_code` with embedded Unicode control characters, `tcode` fields with leading/trailing whitespace or lowercase variants, and malformed ISO 8601 timestamps (e.g. without timezone marker). Currently any of these silently corrupt specific rule results.
+
+---
+
+## Hours log
+
+See [HOURS.md](HOURS.md) for a full breakdown.
+>>>>>>> Stashed changes
