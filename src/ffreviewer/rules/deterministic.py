@@ -115,25 +115,19 @@ def check_r004(session: Session) -> Optional[Finding]:
         e for e in session.change_log
         if e.table.upper() in _SENSITIVE_TABLES
     ]
-
-    if not risky_tcodes and not sensitive_changes:
+    if not risky_tcodes or not sensitive_changes:
         return None
 
-    evidence_parts: list[str] = []
-    if risky_tcodes:
-        evidence_parts.append(
-            "Direct-edit transactions: " + ", ".join(e.tcode for e in risky_tcodes[:5])
-        )
-    if sensitive_changes:
-        evidence_parts.append(
-            "Sensitive tables modified: " + ", ".join({e.table for e in sensitive_changes})
-        )
+    evidence_parts: list[str] = [
+        "Direct-edit transactions: " + ", ".join(e.tcode for e in risky_tcodes[:5]),
+        "Sensitive tables modified: " + ", ".join({e.table for e in sensitive_changes}),
+    ]
 
     return Finding(
         rule_id="R-004",
         severity="high",
         location="transaction_log / change_log",
-        description="Direct table modification detected (SE16N/SM30/SM31 or sensitive table write) without a verified data-fix request.",
+        description="Direct table modification via SE16N/SM30/SM31 on sensitive tables detected without a verified data-fix request.",
         evidence="; ".join(evidence_parts),
     )
 
@@ -186,6 +180,7 @@ _EMERGENCY_RE = re.compile(
     re.IGNORECASE,
 )
 
+_SPECIFIC_REASON_MIN_LEN = 60
 
 def check_r007(session: Session) -> Optional[Finding]:
     start = session.start_time
@@ -195,6 +190,8 @@ def check_r007(session: Session) -> Optional[Finding]:
     if not is_after_hours:
         return None
     if _EMERGENCY_RE.search(session.reason_code):
+        return None
+    if len(session.reason_code.strip()) >= _SPECIFIC_REASON_MIN_LEN:
         return None
 
     day_name = start.strftime("%A")
@@ -258,8 +255,8 @@ def check_r009(session: Session) -> Optional[Finding]:
 # Each entry: (label, set_a, set_b) — fires when ≥1 tcode from set_a AND ≥1 from set_b appear
 _SOD_PAIRS: list[tuple[str, frozenset[str], frozenset[str]]] = [
     (
-        "Vendor master maintenance + payment run",
-        frozenset({"XK01", "XK02", "XK05", "FK01", "FK02", "MK01", "MK02"}),
+        "Vendor bank data change + payment run",
+        frozenset({"XK02", "FK02", "MK02"}),
         frozenset({"F110", "F-53", "F-58", "F-47", "F-48"}),
     ),
     (
@@ -268,24 +265,9 @@ _SOD_PAIRS: list[tuple[str, frozenset[str], frozenset[str]]] = [
         frozenset({"F110", "F-53"}),
     ),
     (
-        "Goods receipt + invoice verification",
-        frozenset({"MIGO"}),
-        frozenset({"MIRO", "MR11", "MRRL"}),
-    ),
-    (
-        "Purchase order creation + goods receipt",
-        frozenset({"ME21N", "ME21", "ME25"}),
-        frozenset({"MIGO"}),
-    ),
-    (
         "Financial period manipulation + document posting",
         frozenset({"OB52", "MMPV", "MMRV"}),
         frozenset({"FB50", "FB60", "MIRO", "F110", "F-43", "F-02"}),
-    ),
-    (
-        "GL account master maintenance + journal posting",
-        frozenset({"FS00", "FSS0", "FSP0"}),
-        frozenset({"FB50", "FB01", "FB02"}),
     ),
 ]
 
@@ -315,20 +297,25 @@ def check_r010(session: Session) -> Optional[Finding]:
 # R-011  Authorization / privilege-management transactions  (additional)
 # ---------------------------------------------------------------------------
 
-_AUTH_TCODES = {"SU01", "SU10", "SU24", "SU25", "PFCG", "RZ10", "SU56", "SUIM"}
+_AUTH_TCODES_HIGH_RISK = {"PFCG", "SU24", "SU25", "RZ10", "SU10"}
+_AUTH_TABLES = {"USR02", "USR04", "USR10", "USR12", "AGR_USERS", "AGR_1251"}
 
 
 def check_r011(session: Session) -> Optional[Finding]:
-    hits = [e for e in session.transaction_log if e.tcode.upper() in _AUTH_TCODES]
+    hits = [e for e in session.transaction_log if e.tcode.upper() in _AUTH_TCODES_HIGH_RISK]
     if not hits:
         return None
+    auth_changes = [e for e in session.change_log if e.table.upper() in _AUTH_TABLES]
+    if not auth_changes:
+        return None
     tcodes = ", ".join(e.tcode for e in hits)
+    tables = ", ".join({e.table for e in auth_changes})
     return Finding(
         rule_id="R-011",
         severity="critical",
-        location="transaction_log",
-        description="Session includes authorization/role-management transactions, raising a privilege-escalation risk.",
-        evidence=f"Transactions: {tcodes}",
+        location="transaction_log / change_log",
+        description="Authorization/role-management transactions with confirmed auth-table writes detected — privilege-escalation risk.",
+        evidence=f"Transactions: {tcodes}; Auth tables modified: {tables}",
     )
 
 
