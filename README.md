@@ -245,4 +245,11 @@ A Basis consultant doing a controlled emergency touching both MM and FI will tri
 ## Hours log
 
 See [HOURS.md](HOURS.md) for a full breakdown.
->>>>>>> Stashed changes
+
+## Author
+
+**Maciek Adamski** — [@madamski9](https://github.com/madamski9)
+
+## License
+
+This project is currently developed as part of an internship project at Seargin. License terms TBD.
