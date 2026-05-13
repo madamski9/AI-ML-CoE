@@ -1,10 +1,57 @@
+<div align="center">
+
 # SAP Firefighter Log Compliance Reviewer
 
-AI-assisted pre-screening tool for SAP GRC Firefighter sessions. Produces structured verdicts (PASS / REJECT / NEEDS_CORRECTION) with per-finding evidence citations, letting human controllers focus on borderline cases instead of reading every log line from scratch.
+### AI-assisted pre-screening tool for SAP GRC Firefighter sessions.
+Produces structured verdicts (**PASS / REJECT / NEEDS_CORRECTION**) with per-finding evidence citations,
+letting human controllers focus on borderline cases instead of reading every log line from scratch.
+
+</div>
 
 ---
 
-## Quick start
+## Tech Stack
+
+<div align="center">
+
+| Area | Technology |
+|:---:|:---:|
+| Frontend UI | <img height="40" src="https://img.shields.io/badge/Streamlit-FF4B4B?style=for-the-badge&logo=streamlit&logoColor=white"> |
+| Backend API | <img height="40" src="https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white"><img height="40" src="https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white"><img height="40" src="https://img.shields.io/badge/Pydantic-E92063?style=for-the-badge&logo=pydantic&logoColor=white"> |
+| Compliance Rules | <img height="40" src="https://img.shields.io/badge/Regex%20%2F%20Python-3776AB?style=for-the-badge&logo=python&logoColor=white"> |
+| LLM Inference | <img height="40" src="https://img.shields.io/badge/Ollama-000000?style=for-the-badge&logo=ollama&logoColor=white"><img height="40" src="https://img.shields.io/badge/qwen2.5:7b-412991?style=for-the-badge"> |
+
+</div>
+
+---
+
+## Screenshots
+
+### Main Screen
+<div align="center">
+    <img width="750" alt="zrzut1" src="https://github.com/user-attachments/assets/6900bf95-e7b2-4219-a11f-f33dfb98764b" />
+</div>
+---
+
+### Findings
+<div align="center">
+    <img width="750" alt="zrzut2" src="https://github.com/user-attachments/assets/4a629bab-a4f2-425d-aa31-83395df17257" />
+</div>
+---
+
+### Suggested Correction & Verdict
+<div align="center">
+    <img width="750" alt="zrzut3" src="https://github.com/user-attachments/assets/67ef31ef-2f0b-49ac-9015-162ca0fa183f" />
+</div>
+---
+
+## Overview
+
+The reviewer runs each session through a two-layer pipeline: fast deterministic rules (regex, arithmetic, set operations) handle 11 of 13 checks in under 1 ms, and an LLM is invoked only for the two checks that require semantic reasoning — module classification (R-002) and volume proportionality (R-006). Correction messages are always LLM-generated to avoid boilerplate that firefighters learn to ignore.
+
+---
+
+## Quick Start
 
 ```bash
 # Install dependencies
@@ -23,7 +70,7 @@ uvicorn src.main:app --reload
 # CLI — single session
 python predict.py --input dataset_candidate/train/sessions/FF-TRAIN-0001.json --output out.jsonl
 
-# Eval harness — one command (train set self-evaluation)
+# Eval harness — full train set
 python predict.py \
     --input  dataset_candidate/train/sessions \
     --output predictions_train.jsonl \
@@ -41,15 +88,15 @@ python predict.py \
 └──────────────────────────────┬───────────────────────────────┘
                                │  Session JSON (validated by Pydantic)
                                ▼
-┌──────────────────────────────────────────────────────────────┐
-│               ffreviewer.engine.review_session()             │
-│                                                              │
-│  ┌───────────────────────────┐  ┌──────────────────────────┐ │
-│  │   Deterministic rules     │  │    LLM-backed rules      │ │
-│  │   R-001, R-003 – R-013   │  │    R-002, R-006          │ │
-│  │   Pure Python / regex     │  │    Ollama qwen2.5:7b     │ │
-│  │   < 1 ms per session      │  │    disk-cached           │ │
-│  └─────────────┬─────────────┘  └────────────┬─────────────┘ │
+┌───────────────────────────────────────────────────────────────┐
+│               ffreviewer.engine.review_session()              │
+│                                                               │
+│  ┌───────────────────────────┐  ┌──────────────────────────┐  │
+│  │   Deterministic rules     │  │    LLM-backed rules      │  │
+│  │   R-001, R-003 – R-013    │  │    R-002, R-006          │  │
+│  │   Pure Python / regex     │  │    Ollama qwen2.5:7b     │  │
+│  │   < 1 ms per session      │  │    disk-cached           │  │
+│  └─────────────┬─────────────┘  └─────────────┬────────────┘  │
 │                └──────────────┬───────────────┘               │
 │                               ▼                               │
 │               _determine_verdict(findings)                    │
@@ -61,107 +108,88 @@ python predict.py \
 │   generate_correction()    return Verdict                     │
 │   (LLM, disk-cached)                                          │
 └──────────────────────────────────────────────────────────────┘
-                               │
-               ┌───────────────┼───────────────┐
-               ▼               ▼               ▼
-        Streamlit UI      FastAPI JSON     predict.py
-        (app.py)          response         JSONL output
-               │
-               ▼
-      Controller decision
-      (PASS / REJECT / SEND BACK)
-      saved to decisions.jsonl
 ```
 
-**Key design decision:** Deterministic checks run first (fast, free, no hallucination risk). LLM is invoked only for two semantically complex checks (module-mismatch classification and volume-proportionality) and for generating the correction message. This keeps median latency under 100 ms for the common PASS path.
+**Key design decision:** Deterministic checks run first (fast, free, no hallucination risk). LLM is invoked only for two semantically complex checks and for generating the correction message. This keeps median latency under 100 ms for the common PASS path.
 
 ---
 
-## Compliance rule catalog
+## Compliance Rule Catalog
 
 ### Baseline rules (R-001 – R-010)
 
 | Rule | Logic | Rationale |
 |------|-------|-----------|
-| R-001 | Reason code empty, < 20 chars, or matches generic-phrase regex | Most common audit finding; templated reasons give reviewers nothing to verify |
-| R-002 | LLM classifies reason into SAP module; mismatch with modules inferred from tcodes | Keyword matching alone can't handle "vendor issue in payment process" → both FI and MM |
-| R-003 | Regex on system_log messages for `/h`, "debug", "value modif"; tcode `/H` in transaction_log | Debug & replace bypasses all change-management controls; must be critical regardless of intent |
-| R-004 | Tcode SE16N/SM30/SM31 OR change_log entries on known sensitive tables | Direct table edits leave no workflow trace and frequently circumvent approval hierarchies |
-| R-005 | tcode SM49/SM69/OS06 OR non-empty os_command_log | OS access from an SAP session is almost never legitimately needed for application-layer fixes |
-| R-006 | LLM assesses whether change/tcode counts are proportionate to stated reason | Regex thresholds are arbitrary; LLM can reason "265 vendor masters ≠ fix one vendor" naturally |
-| R-007 | Session start outside 07:00–19:59 UTC Mon–Fri AND reason doesn't match emergency keywords | After-hours access is higher risk; the exception (genuine emergency) is explicitly carved out |
-| R-008 | `firefighter_user == ticket_requester` (case-insensitive) | Classic four-eyes violation; person requesting their own elevated access removes oversight |
-| R-009 | `(end_time − start_time) > 120 min` | Standard SAP GRC auto-extend limit; sessions running past this should have re-justification |
-| R-010 | Tcode set-intersection against known SoD conflict pairs | Hardcoded from the Big-4 SAP SoD matrix; pair detection is exact and requires no model |
+| R-001 | Reason code empty, < 20 chars, or matches generic-phrase regex | Templated reasons give reviewers nothing to verify |
+| R-002 | LLM classifies reason into SAP module; mismatch with modules inferred from tcodes | Keyword matching can't handle ambiguous cross-module phrasing |
+| R-003 | Regex on system_log for `/h`, "debug", "value modif"; tcode `/H` in transaction_log | Debug & replace bypasses all change-management controls |
+| R-004 | Tcode SE16N/SM30/SM31 OR change_log entries on known sensitive tables | Direct table edits leave no workflow trace |
+| R-005 | Tcode SM49/SM69/OS06 OR non-empty os_command_log | OS access from an SAP session is almost never legitimate |
+| R-006 | LLM assesses whether change/tcode counts are proportionate to stated reason | "265 vendor masters ≠ fix one vendor" requires semantic reasoning |
+| R-007 | Session start outside 07:00–19:59 UTC Mon–Fri AND reason lacks emergency keywords | After-hours access is higher risk; genuine emergencies are carved out |
+| R-008 | `firefighter_user == ticket_requester` (case-insensitive) | Classic four-eyes violation |
+| R-009 | `(end_time − start_time) > 120 min` | Sessions past the GRC auto-extend limit need re-justification |
+| R-010 | Tcode set-intersection against known SoD conflict pairs | Hardcoded from the Big-4 SAP SoD matrix |
 
 ### Additional rules (R-011 – R-013)
 
-| Rule | Severity | Rationale for inclusion |
-|------|----------|------------------------|
-| R-011 | critical | Authorization/role transactions (SU01, PFCG, …) during a firefighter session is privilege-escalation-in-progress; not in the baseline but seen in the training data and among the highest-risk actions in any SAP audit |
-| R-012 | high | Transport-management transactions (SE09/SE10/STMS) must follow the standard ChaRM process; doing them inside a firefighter session is effectively a shadow change and always a red flag |
-| R-013 | medium | Change-log entries outside the session window indicate either clock skew (a data-quality issue reviewers must know about) or log tampering (a serious finding); deterministic to implement and zero false-positive risk on well-formed data |
+| Rule | Severity | Rationale |
+|------|----------|-----------|
+| R-011 | critical | Authorization/role transactions (SU01, PFCG, …) inside a firefighter session = privilege escalation in progress |
+| R-012 | high | Transport transactions (SE09/SE10/STMS) must follow ChaRM; doing them here is a shadow change |
+| R-013 | medium | Change-log entries outside the session window indicate clock skew or log tampering |
 
 ---
 
-## Deterministic vs. LLM — rationale
+## Deterministic vs. LLM
 
 | Aspect | Deterministic (11 rules) | LLM (2 rules + correction) |
 |--------|--------------------------|----------------------------|
-| Rules | R-001, R-003–R-013 | R-002, R-006, correction text |
+| Rules | R-001, R-003 – R-013 | R-002, R-006, correction text |
 | Speed | < 1 ms | 200 ms – 2 s (cached: 0 ms) |
-| Cost | $0 | ~0 tokens (local Ollama) |
+| Cost | $0 | ~$0 (local Ollama) |
 | Reliability | 100% reproducible | Occasional wrong classifications |
-| Why this split | These rules require only exact matches, arithmetic, set operations, or simple regex. No ambiguity that needs language understanding. | Module classification (R-002) and volume proportionality (R-006) both require semantic reasoning about free-text fields. A human reviewer uses domain knowledge, not keyword lookup, for these judgments. LLM replicates that. |
-
-Correction text is always LLM-generated because template-based messages are obvious boilerplate that firefighters learn to ignore. A tailored message citing the specific log lines and suggesting a concrete rewrite is more likely to get a useful response.
+| Why | Exact matches, arithmetic, regex | Free-text semantic reasoning |
 
 ---
 
-## Known failure modes
+## Cost Estimate
 
-### 1. After-hours timezone mismatch (R-007)
-The rule checks `start_time.hour` against UTC business hours (07:00–19:59). Production SAP systems often run in the client's local timezone (CET, EST, …). A session starting at `06:30 UTC` for a German client is `08:30 CET` — perfectly within business hours — but R-007 fires anyway. Fix: add a `client_timezone` field to the session schema, or widen the UTC window to 05:00–22:00 as a conservative proxy.
-
-### 2. R-006 skips moderate-volume anomalies (silent miss)
-The LLM call for R-006 is guarded by `change_count < 10 AND tcode_count < 20`. A session with 15 changes for a reason that justifies at most 1 (e.g. "fix one blocked vendor" → 15 LFA1 rows) passes the guard silently and never reaches the LLM. This threshold was set to avoid LLM calls on PASS sessions, but it creates a blind spot for medium-scale anomalies.
-
-### 3. Verdict heuristic is not calibrated on data
-`_determine_verdict()` maps severity counts to labels using hard-coded thresholds (`critical → REJECT`, `1 high → NEEDS_CORRECTION`, `2+ high → REJECT`). It does not use any training-set statistics. A single high-severity R-012 finding (transport without CR) currently triggers NEEDS_CORRECTION, but the gold label for a nearly identical session is REJECT. A logistic-regression classifier trained on the 50 labelled examples would likely outperform this heuristic.
-
-### 4. R-008 requires `ticket_requester` field
-Self-approval is only detected when the session JSON includes the optional `ticket_requester` field. Sessions where this field is absent — or where the requester is embedded in the free-text reason code ("I requested this via INC0042 because…") — are missed entirely.
-
-### 5. R-002 cannot handle legitimately cross-module sessions
-A Basis consultant doing a controlled emergency that touches both vendor master (MM) and a payment run (FI) will trigger R-002 even though both modules are clearly mentioned in the reason. The rule currently flags any mismatch between the *primary* inferred module and the session modules, which over-fires on multi-module emergencies.
-
----
-
-## Cost estimate per session
-
-The LLM backend is a locally-hosted Ollama instance (`qwen2.5:7b`). API cost is **$0**; the only cost is electricity and GPU time.
-
-For reference, if migrated to a cloud API (e.g. Claude Haiku or GPT-4o-mini):
+The LLM backend is a locally-hosted Ollama instance. API cost is **$0**. For reference, if migrated to a cloud API:
 
 | Path | Calls | Approx. tokens | Cost at $0.15/1M input |
 |------|-------|----------------|------------------------|
 | PASS (no LLM triggers) | 0 | 0 | $0.000 |
-| NEEDS_CORRECTION (R-002 + correction) | 2 | ~1 200 | ~$0.0002 |
+| NEEDS_CORRECTION | 2 | ~1 200 | ~$0.0002 |
 | Full hit (R-002 + R-006 + correction) | 3 | ~2 000 | ~$0.0003 |
-| Worst case (all LLM checks) | 3 | ~2 500 | ~$0.0004 |
 
-At 80 sessions/month (typical large AMS client) this is under $0.03/month on cloud hosting. Disk-based caching eliminates repeated cost for identical inputs (e.g. re-running the eval harness during development).
+At 80 sessions/month (typical large AMS client) this is **under $0.03/month** on cloud hosting.
 
 ---
 
-## What I would build next (given another week)
+## Known Failure Modes
 
-1. **Calibrated verdict classifier** — replace the severity-counting heuristic with a logistic regression or small gradient-boosted model trained on the 50 labelled examples. Features: one-hot rule IDs, severity counts, session metadata (duration, hour, is_weekend). Even with 50 examples this should outperform the hand-coded thresholds on NEEDS_CORRECTION vs. REJECT boundary cases.
+**1. After-hours timezone mismatch (R-007)**
+The rule checks `start_time.hour` against UTC business hours. A session at `06:30 UTC` for a German client is `08:30 CET` — business hours — but R-007 fires anyway. Fix: add `client_timezone` to the session schema, or widen the UTC window to `05:00–22:00` as a conservative proxy.
 
-2. **Client timezone support** — add an optional `client_timezone` field to the Session model and adjust R-007 accordingly; eliminates the largest category of false positives on the current data.
+**2. R-006 misses moderate-volume anomalies**
+The LLM guard fires only when `change_count < 10 AND tcode_count < 20`. A session with 15 changes for a reason justifying at most 1 passes silently. This threshold was set to avoid LLM calls on clean sessions, but it creates a blind spot for medium-scale anomalies.
 
-3. **Streaming UI with log highlighting** — render the full transaction, change, and system logs in the Streamlit UI with the relevant lines highlighted in the finding's colour. Controllers currently have to mentally match a finding's `evidence` string back to the raw log; this would cut review time significantly.
+**3. Verdict heuristic is uncalibrated**
+`_determine_verdict()` uses hard-coded thresholds (`critical → REJECT`, `1 high → NEEDS_CORRECTION`, `2+ high → REJECT`). A logistic-regression classifier trained on the 50 labelled examples would likely outperform these thresholds on NEEDS_CORRECTION vs. REJECT boundary cases.
 
-4. **"Disagree with gold label" appendix** — after running the eval harness, manually review every prediction that differs from the gold label and write up which ones I believe are labelling errors vs. genuine model mistakes. This is explicitly invited by the challenge brief and distinguishes candidates who treat the dataset as ground truth from those who engage critically.
+**4. R-008 requires `ticket_requester` field**
+Self-approval is only detected when the optional `ticket_requester` field is present. Sessions where the requester is embedded in free-text reason code are missed entirely.
 
-5. **Adversarial input handling** — validate and normalise: out-of-order timestamps (sort before checks), `reason_code` with embedded Unicode control characters, `tcode` fields with leading/trailing whitespace or lowercase variants, and malformed ISO 8601 timestamps (e.g. without timezone marker). Currently any of these silently corrupt specific rule results.
+**5. R-002 over-fires on multi-module sessions**
+A Basis consultant doing a controlled emergency touching both MM and FI will trigger R-002 even though both modules appear in the reason. The rule currently flags any mismatch against the *primary* inferred module.
+
+---
+
+## What I Would Build Next
+
+1. **Calibrated verdict classifier** — replace the severity-counting heuristic with a logistic regression or small gradient-boosted model trained on the 50 labelled examples.
+2. **Client timezone support** — add `client_timezone` to the Session model and adjust R-007; eliminates the largest false-positive category.
+3. **Streaming UI with log highlighting** — render transaction, change, and system logs with relevant lines highlighted per finding's colour. Controllers currently match evidence strings back to raw logs manually.
+4. **"Disagree with gold label" appendix** — after running the eval harness, document which label differences are genuine model mistakes vs. suspected labelling errors.
+5. **Adversarial input handling** — normalise out-of-order timestamps, Unicode control characters in `reason_code`, tcode fields with whitespace or lowercase variants, and malformed ISO 8601 timestamps.
