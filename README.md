@@ -20,6 +20,7 @@ letting human controllers focus on borderline cases instead of reading every log
 | Backend API | <img height="40" src="https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white"><img height="40" src="https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white"><img height="40" src="https://img.shields.io/badge/Pydantic-E92063?style=for-the-badge&logo=pydantic&logoColor=white"> |
 | Compliance Rules | <img height="40" src="https://img.shields.io/badge/Regex%20%2F%20Python-3776AB?style=for-the-badge&logo=python&logoColor=white"> |
 | LLM Inference | <img height="40" src="https://img.shields.io/badge/Ollama-000000?style=for-the-badge&logo=ollama&logoColor=white"><img height="40" src="https://img.shields.io/badge/qwen2.5:7b-412991?style=for-the-badge"> |
+| Infrastructure | <img height="40" src="https://img.shields.io/badge/Shell-121011?style=for-the-badge&logo=gnu-bash&logoColor=white"> |
 
 </div>
 
